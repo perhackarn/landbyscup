@@ -1037,106 +1037,189 @@
       );
     }
 
-  // --- CupResults ---
+// --- CupResults ---
 function CupResults({ shooters, scores, competitions }) {
+  const sectionRef = React.useRef(null);
+
   const klassLista = ["öppen", "dam", "veteran", "ungdom", "junior med stöd"];
-  const competitionSorted = competitions.slice().sort((a, b) => a.date.localeCompare(b.date));
-  const competitionIdsSorted = competitionSorted.map(c => c.id);
 
-  // Steg 1: Placeringar per deltävling, per klass
-  const placementsPerCompetition = {};
-  competitions.forEach(comp => {
-    const shootersByClass = {};
-    klassLista.forEach(k => shootersByClass[k] = []);
-    shooters.forEach(s => {
-      const shooterScores = scores.filter(sc => sc.shooterId === s.id && sc.competitionId === comp.id);
-      const total = shooterScores.reduce((sum, sc) => sum + (sc.total || 0), 0);
-      shootersByClass[s.klass].push({ shooterId: s.id, total });
+  // Sortera deltävlingar (för kolumnordning i UI och PDF)
+  const competitionsSorted = React.useMemo(() => {
+    const comps = [...(competitions || [])];
+    // Försök sortera efter datum om det finns, annars alfabetiskt på namn
+    comps.sort((a, b) => {
+      if (a.date && b.date) return String(a.date).localeCompare(String(b.date));
+      return String(a.name || "").localeCompare(String(b.name || ""));
     });
-    placementsPerCompetition[comp.id] = {};
-    klassLista.forEach(k => {
-      const arr = shootersByClass[k].filter(s => s.total > 0);
-      arr.sort((a, b) => b.total - a.total);
-      placementsPerCompetition[comp.id][k] = arr.map((s, i) => ({ ...s, placering: i + 1 }));
-    });
-  });
+    return comps;
+  }, [competitions]);
 
-  // Steg 2: Bygg cupresultat per skytt (klassvis placeringar per deltävling)
-  const grouped = {};
-  shooters.forEach(s => {
-    // Placering per deltävling (ordning och namn matchar competitionSorted)
-    const placings = competitionIdsSorted.map(compId => {
-      const klassPlacings = placementsPerCompetition[compId]?.[s.klass] || [];
-      const p = klassPlacings.find(ss => ss.shooterId === s.id);
-      return p ? p.placering : 1000;
-    });
-    // Endast de 5 bästa (lägsta) placeringarna räknas
-    const sumPlacings = placings
-      .slice()
-      .sort((a, b) => a - b)
-      .slice(0, 5)
-      .reduce((a, b) => a + b, 0);
-    const skyttObj = {
-      ...s,
-      placings,
-      sumPlacings
-    };
-    if (!grouped[s.klass]) grouped[s.klass] = [];
-    grouped[s.klass].push(skyttObj);
-  });
+  // Beräkna Cupresultat per klass: per skytt per deltävling + total
+  const groupedByClass = React.useMemo(() => {
+    const byClass = {};
+    (shooters || []).forEach(s => {
+      // Summera poäng per deltävling för skytten
+      const perComp = competitionsSorted.map(comp => {
+        const sumForComp = (scores || [])
+          .filter(sc => sc.shooterId === s.id && sc.competitionId === comp.id)
+          .reduce((acc, sc) => acc + (Number(sc.total) || 0), 0);
+        return sumForComp;
+      });
 
-  // Sortera skyttar per klass
-  klassLista.forEach(k => {
-    if (grouped[k]) {
-      grouped[k].sort((a, b) => a.sumPlacings - b.sumPlacings);
-    }
-  });
+      const total = perComp.reduce((a, b) => a + b, 0);
+      const obj = { ...s, compTotals: perComp, total };
+
+      if (!byClass[s.klass]) byClass[s.klass] = [];
+      byClass[s.klass].push(obj);
+    });
+
+    // Sortera inom klass på totalpoäng
+    Object.keys(byClass).forEach(k => {
+      byClass[k].sort((a, b) => (b.total || 0) - (a.total || 0));
+    });
+
+    return byClass;
+  }, [shooters, scores, competitionsSorted]);
+
+  // PDF-export (autoTable) med samma tema som Resultatlistor
+  const exportPDF = () => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4"
+    });
+
+    doc.setFontSize(16);
+    doc.text("Cupresultat", 105, 20, { align: "center" });
+    doc.setFontSize(11);
+    const compInfo = competitionsSorted.length > 0
+      ? `Deltävlingar: ${competitionsSorted.map(c => c.name || "").join(" • ")}`
+      : "Inga deltävlingar";
+    doc.text(compInfo, 105, 28, { align: "center" });
+
+    let startY = 36;
+
+    klassLista.forEach(klass => {
+      const list = groupedByClass[klass] || [];
+
+      // Head: Plats, Skytt, Ort, ...alla deltävlingar..., Summa
+      const headRow = [
+        "Plats",
+        "Skytt",
+        "Ort",
+        ...competitionsSorted.map(c => c.name || "Deltävling"),
+        "Summa"
+      ];
+      const bodyRows = list.length
+        ? list.map((s, idx) => ([
+            `${idx + 1}`,
+            s.name || "",
+            s.club || "",
+            ...s.compTotals.map(v => String(v || 0)),
+            String(s.total || 0),
+          ]))
+        : [["Inga deltagare"]];
+
+      doc.autoTable({
+        startY,
+        head: [headRow],
+        body: bodyRows,
+        theme: "grid",
+        styles: {
+          fontSize: 10,
+          cellPadding: 2,
+          halign: "left",
+          valign: "middle"
+        },
+        headStyles: {
+          fillColor: [71, 85, 105],
+          textColor: 255,
+          fontStyle: "bold"
+        },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        margin: { left: 10, right: 10 },
+        didDrawPage: (data) => {
+          doc.setFontSize(13);
+          doc.text(klass, 10, data.settings.startY - 4);
+        }
+      });
+
+      startY = doc.lastAutoTable.finalY + 10;
+    });
+
+    doc.save("cupresultat.pdf");
+  };
 
   return (
-    <section>
+    <section ref={sectionRef}>
       <h2 className="text-xl font-semibold mb-6 text-primary-800 flex items-center gap-3">
         <AwardIcon className="w-6 h-6" />
-        Cupresultat (5 bästa deltävlingarna)
+        Cupresultat
       </h2>
-      {klassLista.map(klass => (
-        <div key={klass} className="mb-8">
-          <h3 className="text-lg font-semibold mb-4 capitalize text-primary-800 bg-primary-100 px-3 py-2 rounded-lg">{klass}</h3>
-          <div className="overflow-x-auto">
-            <table className="min-w-full border border-primary-200 rounded-lg text-sm bg-white">
-              <thead>
-                <tr className="bg-primary-100 border-b border-primary-200">
-                  <th className="p-3 text-left font-medium text-primary-800">Plats</th>
-                  <th className="p-3 text-left font-medium text-primary-800">Skytt</th>
-                  <th className="p-3 text-left font-medium text-primary-800">Ort</th>
-                  {competitionSorted.map(c => (
-                    <th className="p-3 text-left font-medium text-primary-800" key={c.id}>{c.name}</th>
-                  ))}
-                  <th className="p-3 text-left font-medium text-primary-800">Summa</th>
-                </tr>
-              </thead>
-              <tbody>
-                {(grouped[klass] || []).length === 0 ? (
-                  <tr>
-                    <td className="p-3 text-primary-500" colSpan={4 + competitionSorted.length}>Inga deltagare</td>
+
+      <div className="mb-6 flex flex-wrap gap-4 items-center bg-primary-50 p-4 rounded-lg border border-primary-200">
+        <span className="text-primary-700 text-sm font-medium">
+          {competitionsSorted.length > 0
+            ? `Deltävlingar: ${competitionsSorted.map(c => c.name).join(", ")}`
+            : "Inga deltävlingar"}
+        </span>
+        <button
+          onClick={exportPDF}
+          className="bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors ml-auto"
+        >
+          Exportera som PDF
+        </button>
+      </div>
+
+      {klassLista.map(klass => {
+        const list = groupedByClass[klass] || [];
+        return (
+          <div key={klass} className="mb-8">
+            <h3 className="text-lg font-semibold mb-4 capitalize text-primary-800 bg-primary-100 px-3 py-2 rounded-lg">
+              {klass}
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="min-w-full border border-primary-200 rounded-lg text-sm bg-white">
+                <thead>
+                  <tr className="bg-primary-100 border-b border-primary-200">
+                    <th className="p-3 text-left font-medium text-primary-800">Plats</th>
+                    <th className="p-3 text-left font-medium text-primary-800">Skytt</th>
+                    <th className="p-3 text-left font-medium text-primary-800">Ort</th>
+                    {competitionsSorted.map(c => (
+                      <th key={c.id} className="p-3 text-left font-medium text-primary-800">
+                        {c.name}
+                      </th>
+                    ))}
+                    <th className="p-3 text-left font-medium text-primary-800">Summa</th>
                   </tr>
-                ) : (
-                  grouped[klass].map((s, i) => (
-                    <tr key={s.id} className="border-b border-primary-100 hover:bg-primary-50 transition-colors">
-                      <td className="p-3 font-medium">{i + 1}</td>
-                      <td className="p-3 font-medium text-primary-800">{s.name}</td>
-                      <td className="p-3 text-primary-600">{s.club}</td>
-                      {s.placings.map((p, idx) => (
-                        <td className="p-3 font-mono text-primary-700" key={idx}>{p === 1000 ? "-" : p}</td>
-                      ))}
-                      <td className="p-3 font-bold text-primary-800">{s.sumPlacings}</td>
+                </thead>
+                <tbody>
+                  {list.length === 0 ? (
+                    <tr>
+                      <td className="p-3 text-primary-600" colSpan={4 + competitionsSorted.length}>
+                        Inga deltagare
+                      </td>
                     </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
+                  ) : (
+                    list.map((s, i) => (
+                      <tr key={s.id || i} className="border-b border-primary-100">
+                        <td className="p-3">{i + 1}</td>
+                        <td className="p-3 font-medium text-primary-800">{s.name}</td>
+                        <td className="p-3 text-primary-600">{s.club}</td>
+                        {s.compTotals.map((v, idx) => (
+                          <td key={idx} className="p-3 font-mono text-primary-700">{v || 0}</td>
+                        ))}
+                        <td className="p-3 font-bold text-primary-800">{s.total}</td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </section>
   );
 }
