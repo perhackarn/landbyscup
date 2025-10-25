@@ -1037,128 +1037,67 @@
       );
     }
 
- // Cup results
+  // --- CupResults ---
 function CupResults({ shooters, scores, competitions }) {
   const klassLista = ["öppen", "dam", "veteran", "ungdom", "junior med stöd"];
+  const competitionSorted = competitions.slice().sort((a, b) => a.date.localeCompare(b.date));
+  const competitionIdsSorted = competitionSorted.map(c => c.id);
 
-  // Grupp och summera poäng per skytt över alla deltävlingar
+  // Steg 1: Placeringar per deltävling, per klass
+  const placementsPerCompetition = {};
+  competitions.forEach(comp => {
+    const shootersByClass = {};
+    klassLista.forEach(k => shootersByClass[k] = []);
+    shooters.forEach(s => {
+      const shooterScores = scores.filter(sc => sc.shooterId === s.id && sc.competitionId === comp.id);
+      const total = shooterScores.reduce((sum, sc) => sum + (sc.total || 0), 0);
+      shootersByClass[s.klass].push({ shooterId: s.id, total });
+    });
+    placementsPerCompetition[comp.id] = {};
+    klassLista.forEach(k => {
+      const arr = shootersByClass[k].filter(s => s.total > 0);
+      arr.sort((a, b) => b.total - a.total);
+      placementsPerCompetition[comp.id][k] = arr.map((s, i) => ({ ...s, placering: i + 1 }));
+    });
+  });
+
+  // Steg 2: Bygg cupresultat per skytt (klassvis placeringar per deltävling)
   const grouped = {};
   shooters.forEach(s => {
-    const shooterScores = (scores || []).filter(sc => sc.shooterId === s.id);
-    // Totals per tävling (viktigt för kolumner i tabellen och PDF)
-    const totalsPerCompetition = {};
-    shooterScores.forEach(sc => {
-      totalsPerCompetition[sc.competitionId] = (totalsPerCompetition[sc.competitionId] || 0) + (sc.total || 0);
+    // Placering per deltävling (ordning och namn matchar competitionSorted)
+    const placings = competitionIdsSorted.map(compId => {
+      const klassPlacings = placementsPerCompetition[compId]?.[s.klass] || [];
+      const p = klassPlacings.find(ss => ss.shooterId === s.id);
+      return p ? p.placering : 1000;
     });
-    const overallTotal = Object.values(totalsPerCompetition).reduce((a, b) => a + b, 0);
+    // Endast de 5 bästa (lägsta) placeringarna räknas
+    const sumPlacings = placings
+      .slice()
+      .sort((a, b) => a - b)
+      .slice(0, 5)
+      .reduce((a, b) => a + b, 0);
+    const skyttObj = {
+      ...s,
+      placings,
+      sumPlacings
+    };
     if (!grouped[s.klass]) grouped[s.klass] = [];
-    grouped[s.klass].push({ ...s, overallTotal, totalsPerCompetition });
+    grouped[s.klass].push(skyttObj);
   });
 
-  // Sortera: först total, sedan namn som fallback
+  // Sortera skyttar per klass
   klassLista.forEach(k => {
     if (grouped[k]) {
-      grouped[k].sort((a, b) => {
-        if (b.overallTotal !== a.overallTotal) return b.overallTotal - a.overallTotal;
-        return a.name.localeCompare(b.name);
-      });
+      grouped[k].sort((a, b) => a.sumPlacings - b.sumPlacings);
     }
   });
-
-  // PDF-export för cupresultat (jsPDF + autoTable)
-  const exportCupPDF = () => {
-    const { jsPDF } = window.jspdf;
-    const doc = new jsPDF({
-      orientation: "portrait",
-      unit: "mm",
-      format: "a4"
-    });
-
-    // Titel
-    doc.setFontSize(16);
-    doc.text("Cupresultat", 105, 20, { align: "center" });
-
-    // Lista deltävlingar i header (namn)
-    const compNames = (competitions || []).map(c => c.name);
-    doc.setFontSize(11);
-    if (compNames.length > 0) {
-      // Om raden blir för lång så bryter autoTable senare; här är en enkel centrerad rad
-      doc.text(`Deltävlingar: ${compNames.join(" · ")}`, 105, 28, { align: "center" });
-    }
-
-    let startY = 36;
-    klassLista.forEach(klass => {
-      const rows = [];
-      if (grouped[klass] && grouped[klass].length > 0) {
-        grouped[klass].forEach((s, i) => {
-          // Kolumner: Plats, Namn, Ort, totals per deltävling i samma ordning som competitions, Summa
-          const perCompCols = (competitions || []).map(c => String(s.totalsPerCompetition?.[c.id] || 0));
-          rows.push([
-            `${i + 1}`,
-            s.name,
-            s.club || "",
-            ...perCompCols,
-            String(s.overallTotal)
-          ]);
-        });
-      } else {
-        const emptyCols = (competitions || []).map(() => "");
-        rows.push(["-", "Inga deltagare", "", ...emptyCols, "0"]);
-      }
-
-      // Head: Plats, Skytt, Ort, [Tävlingskolumner...], Summa
-      const headers = [
-        ["Plats", "Skytt", "Ort", ...(competitions || []).map(c => c.name), "Summa"]
-      ];
-
-      doc.autoTable({
-        startY,
-        head: headers,
-        body: rows,
-        theme: "grid",
-        styles: {
-          fontSize: 9,
-          cellPadding: 2,
-          halign: "left",
-          valign: "middle"
-        },
-        headStyles: {
-          fillColor: [71, 85, 105],
-          textColor: 255,
-          fontStyle: "bold"
-        },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
-        margin: { left: 10, right: 10 },
-        didDrawPage: (data) => {
-          doc.setFontSize(13);
-          doc.text(klass.charAt(0).toUpperCase() + klass.slice(1), 10, data.settings.startY - 4);
-        }
-      });
-
-      startY = doc.lastAutoTable.finalY + 8;
-    });
-
-    const filename = `cupresultat_${new Date().toISOString().slice(0,10)}.pdf`;
-    doc.save(filename);
-  };
 
   return (
     <section>
       <h2 className="text-xl font-semibold mb-6 text-primary-800 flex items-center gap-3">
         <AwardIcon className="w-6 h-6" />
-        Cupresultat
+        Cupresultat (5 bästa deltävlingarna)
       </h2>
-
-      <div className="mb-6 flex flex-wrap gap-4 items-center bg-primary-50 p-4 rounded-lg border border-primary-200">
-        <div className="flex items-center gap-2">
-          <label className="text-sm font-medium text-primary-700">Visar alla deltävlingar</label>
-        </div>
-
-        <button onClick={exportCupPDF} className="bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors ml-auto">
-          Exportera cup som PDF
-        </button>
-      </div>
-
       {klassLista.map(klass => (
         <div key={klass} className="mb-8">
           <h3 className="text-lg font-semibold mb-4 capitalize text-primary-800 bg-primary-100 px-3 py-2 rounded-lg">{klass}</h3>
@@ -1169,27 +1108,29 @@ function CupResults({ shooters, scores, competitions }) {
                   <th className="p-3 text-left font-medium text-primary-800">Plats</th>
                   <th className="p-3 text-left font-medium text-primary-800">Skytt</th>
                   <th className="p-3 text-left font-medium text-primary-800">Ort</th>
-                  {(competitions || []).map(c => (
+                  {competitionSorted.map(c => (
                     <th className="p-3 text-left font-medium text-primary-800" key={c.id}>{c.name}</th>
                   ))}
                   <th className="p-3 text-left font-medium text-primary-800">Summa</th>
                 </tr>
               </thead>
               <tbody>
-                {(grouped[klass] && grouped[klass].length > 0) ? grouped[klass].map((s, idx) => (
-                  <tr key={s.id} className="border-b last:border-b-0">
-                    <td className="p-3">{idx + 1}</td>
-                    <td className="p-3 font-medium text-primary-800">{s.name}</td>
-                    <td className="p-3 text-primary-600">{s.club || ""}</td>
-                    {(competitions || []).map(c => (
-                      <td key={c.id} className="p-3">{String(s.totalsPerCompetition?.[c.id] || 0)}</td>
-                    ))}
-                    <td className="p-3 font-semibold">{String(s.overallTotal)}</td>
-                  </tr>
-                )) : (
+                {(grouped[klass] || []).length === 0 ? (
                   <tr>
-                    <td className="p-3" colSpan={3 + (competitions || []).length + 1}>Inga deltagare</td>
+                    <td className="p-3 text-primary-500" colSpan={4 + competitionSorted.length}>Inga deltagare</td>
                   </tr>
+                ) : (
+                  grouped[klass].map((s, i) => (
+                    <tr key={s.id} className="border-b border-primary-100 hover:bg-primary-50 transition-colors">
+                      <td className="p-3 font-medium">{i + 1}</td>
+                      <td className="p-3 font-medium text-primary-800">{s.name}</td>
+                      <td className="p-3 text-primary-600">{s.club}</td>
+                      {s.placings.map((p, idx) => (
+                        <td className="p-3 font-mono text-primary-700" key={idx}>{p === 1000 ? "-" : p}</td>
+                      ))}
+                      <td className="p-3 font-bold text-primary-800">{s.sumPlacings}</td>
+                    </tr>
+                  ))
                 )}
               </tbody>
             </table>
