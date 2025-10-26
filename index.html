@@ -1036,15 +1036,17 @@
         </section>
       );
     }
+
+//Cupresultat
+
 function CupResults({ shooters, scores, competitions }) {
-  const [showAll, setShowAll] = React.useState(false);
   const klassLista = ["öppen", "dam", "veteran", "ungdom", "junior med stöd"];
 
-  // Steg 1: Beräkna placering för varje skytt i varje tävling
+  // Steg 1: Beräkna placering för varje skytt i varje tävling, per klass
   const competitionPlacements = {};
   competitions.forEach(c => {
-    const skiljemalStationer = c.skiljemal || [1, 2, 3];
     competitionPlacements[c.id] = {};
+    const skiljemalStationer = c.skiljemal || [1, 2, 3];
 
     klassLista.forEach(klass => {
       const klassShooters = shooters.filter(s => s.klass === klass);
@@ -1105,27 +1107,71 @@ function CupResults({ shooters, scores, competitions }) {
       const topFive = sortedPlacements.slice(0, 5);
       const cupTotal = topFive.reduce((sum, p) => sum + p, 0);
 
-      return {
-        ...s,
-        placements,
-        cupTotal
-      };
+      return { ...s, placements, cupTotal };
     }).filter(s => s.cupTotal < 5000); // Filtrera bort de som inte deltagit alls
 
-    // Sortera efter lägst cup-poäng
     results.sort((a, b) => a.cupTotal - b.cupTotal);
     finalCupResults[klass] = results;
   });
 
+  const exportPDF = () => {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+
+    doc.setFontSize(16);
+    doc.text("Cupresultat - Landbys Cup", 148.5, 20, { align: "center" });
+
+    let startY = 30;
+    klassLista.forEach(klass => {
+      if (finalCupResults[klass] && finalCupResults[klass].length > 0) {
+        if (startY > 180) { // Check if there's enough space, otherwise add new page
+          doc.addPage();
+          startY = 20;
+        }
+        
+        const headers = [["Plats", "Skytt", "Ort", ...competitions.map(c => c.name.split(' ').pop()), "Totalpoäng"]];
+        const body = finalCupResults[klass].map((s, index) => [
+          index + 1,
+          s.name,
+          s.club,
+          ...s.placements.map(p => p === 1000 ? "-" : p),
+          s.cupTotal
+        ]);
+
+        doc.autoTable({
+          startY: startY,
+          head: headers,
+          body: body,
+          theme: "grid",
+          didDrawPage: (data) => {
+            doc.setFontSize(13);
+            doc.text(klass.charAt(0).toUpperCase() + klass.slice(1), 14, data.settings.startY - 4);
+          },
+          headStyles: { fillColor: [71, 85, 105], textColor: 255, fontStyle: "bold" },
+          alternateRowStyles: { fillColor: [248, 250, 252] },
+          margin: { left: 14, right: 14 },
+        });
+        startY = doc.lastAutoTable.finalY + 10;
+      }
+    });
+
+    doc.save(`cupresultat_landbys_cup.pdf`);
+  };
+
   return (
     <section>
-      <h2 className="text-xl font-semibold mb-6 text-primary-800 flex items-center gap-3">
-        <AwardIcon className="w-6 h-6" />
-        Cupresultat
-      </h2>
-      <p className="text-sm text-primary-600 mb-4">
-        Visar totalpoäng baserat på de 5 bästa placeringarna från alla deltävlingar. Lägst poäng vinner.
-        Skytt som ej deltagit i en deltävling får 1000 poäng (visas som "-").
+      <div className="flex flex-wrap justify-between items-center mb-6 gap-4">
+        <h2 className="text-xl font-semibold text-primary-800 flex items-center gap-3">
+          <AwardIcon className="w-6 h-6" />
+          Cupresultat
+        </h2>
+        <button onClick={exportPDF} className="bg-primary-700 hover:bg-primary-800 text-white px-4 py-2 rounded-lg font-medium shadow-sm transition-colors">
+          Exportera som PDF
+        </button>
+      </div>
+      <p className="text-sm text-primary-600 mb-4 bg-primary-50 p-3 rounded-lg border border-primary-200">
+        Totalpoängen baseras på de <strong>5 bästa placeringarna</strong> från alla deltävlingar. Lägst poäng vinner.
+        Skytt som ej deltagit i en deltävling får 1000 poäng och visas som "-".
       </p>
 
       {klassLista.map(klass => (
@@ -1141,7 +1187,7 @@ function CupResults({ shooters, scores, competitions }) {
                     <th className="p-3 text-left font-medium text-primary-800">Ort</th>
                     {competitions.map(c => (
                       <th key={c.id} className="p-3 text-center font-medium text-primary-800" title={c.name}>
-                        {c.name.split(' ').pop()}
+                        {c.name.replace("Deltävling", "Dt")}
                       </th>
                     ))}
                     <th className="p-3 text-right font-medium text-primary-800">Totalpoäng</th>
