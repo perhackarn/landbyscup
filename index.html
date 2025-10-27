@@ -1043,7 +1043,7 @@
       );
     }
 
-//Cupresultat
+//---Cupresultat---
 
 function CupResults({ shooters, scores, competitions }) {
   const klassLista = ["öppen", "dam", "veteran", "ungdom", "junior med stöd"];
@@ -1176,8 +1176,8 @@ function CupResults({ shooters, scores, competitions }) {
         </button>
       </div>
       <p className="text-sm text-primary-600 mb-4 bg-primary-50 p-3 rounded-lg border border-primary-200">
-        Totalpoängen baseras på de <strong>5 bästa placeringarna</strong> från alla deltävlingar. Lägst poäng vinner.
-        Skytt som ej deltagit i en deltävling får 1000 poäng och visas som "-".
+        Totalpoängen baseras på de <strong>5 bästa placeringarna</strong> av de 7 deltävlingarna. Lägst poäng vinner.
+        Skytt som ej deltagit i en deltävling får 1000 poäng och visas som -.
       </p>
 
       {klassLista.map(klass => (
