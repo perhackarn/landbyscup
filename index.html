@@ -86,7 +86,6 @@
       signInWithEmailAndPassword
     } from "https://www.gstatic.com/firebasejs/10.12.3/firebase-auth.js";
 
-    // NOTE: replace with your existing firebaseConfig object from the repo
     const firebaseConfig = {
       apiKey: "AIzaSyB0C2ecPKLnbIMzWuj9LHcZa_fa9c47GzM",
       authDomain: "landbys-cup-2288f.firebaseapp.com",
@@ -94,7 +93,6 @@
       storageBucket: "landbys-cup-2288f.appspot.com",
       messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
       appId: "YOUR_APP_ID",
-      // ...other keys if any
     };
 
     const app = initializeApp(firebaseConfig);
@@ -690,7 +688,7 @@
       });
     }
 
-    // 🔹 Rensa formuläret efter att poängen sparats
+    //Rensa formuläret efter att poängen sparats
     setShots([
       { value: 0, femetta: false },
       { value: 0, femetta: false },
@@ -698,9 +696,9 @@
       { value: 0, femetta: false },
       { value: 0, femetta: false }
     ]);
-    setShooterId("");          // 🔸 Töm vald skytt
-    setSearchShooter("");      // 🔸 Rensar sökrutan
-    setFilteredShooters([]);   // 🔸 (Valfritt) Stänger ev. öppen söklista
+    setShooterId("");          
+    setSearchShooter("");      
+    setFilteredShooters([]);   
   } catch (e) {
     console.error(e);
     alert("Kunde inte spara poäng, försök igen.");
@@ -1043,7 +1041,7 @@
       );
     }
 
-//---Cupresultat---
+//---Cupresults---
 
 function CupResults({ shooters, scores, competitions }) {
   const klassLista = ["öppen", "dam", "veteran", "ungdom", "junior med stöd"];
