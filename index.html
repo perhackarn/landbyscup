@@ -662,44 +662,50 @@
       };
 
       const saveScore = async () => {
-        if (!user) return alert("Du måste vara inloggad!");
-        if (!competitionId || !shooterId) return alert("Välj tävling och skytt först.");
-        const total = shots.reduce((a, b) => a + (Number(b.value) || 0), 0);
-        const femettor = shots.filter(s => s.femetta && (s.value === 5 || s.value === 10)).length;
+  if (!user) return alert("Du måste vara inloggad!");
+  if (!competitionId || !shooterId) return alert("Välj tävling och skytt först.");
 
-        try {
-          if (editingId) {
-            await updateDoc(doc(db, "scores", editingId), {
-              competitionId,
-              shooterId,
-              station,
-              shots,
-              total,
-              femettor
-            });
-            setEditingId(null);
-          } else {
-            await addDoc(collection(db, "scores"), {
-              competitionId,
-              shooterId,
-              station,
-              shots,
-              total,
-              femettor
-            });
-          }
-          setShots([
-            { value: 0, femetta: false },
-            { value: 0, femetta: false },
-            { value: 0, femetta: false },
-            { value: 0, femetta: false },
-            { value: 0, femetta: false }
-          ]);
-        } catch (e) {
-          console.error(e);
-          alert("Kunde inte spara poäng, försök igen.");
-        }
-      };
+  const total = shots.reduce((a, b) => a + (Number(b.value) || 0), 0);
+  const femettor = shots.filter(s => s.femetta && (s.value === 5 || s.value === 10)).length;
+
+  try {
+    if (editingId) {
+      await updateDoc(doc(db, "scores", editingId), {
+        competitionId,
+        shooterId,
+        station,
+        shots,
+        total,
+        femettor
+      });
+      setEditingId(null);
+    } else {
+      await addDoc(collection(db, "scores"), {
+        competitionId,
+        shooterId,
+        station,
+        shots,
+        total,
+        femettor
+      });
+    }
+
+    // 🔹 Rensa formuläret efter att poängen sparats
+    setShots([
+      { value: 0, femetta: false },
+      { value: 0, femetta: false },
+      { value: 0, femetta: false },
+      { value: 0, femetta: false },
+      { value: 0, femetta: false }
+    ]);
+    setShooterId("");          // 🔸 Töm vald skytt
+    setSearchShooter("");      // 🔸 Rensar sökrutan
+    setFilteredShooters([]);   // 🔸 (Valfritt) Stänger ev. öppen söklista
+  } catch (e) {
+    console.error(e);
+    alert("Kunde inte spara poäng, försök igen.");
+  }
+};
 
       const stationOptions = Array.from({ length: 7 }, (_, i) => i + 1);
 
