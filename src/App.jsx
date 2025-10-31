@@ -530,7 +530,7 @@ try {
     });
   }
 
-  //Rensa formuläret efter att poängen sparats
+  // Rensa formuläret efter att poängen sparats
   setShots([
     { value: 0, femetta: false },
     { value: 0, femetta: false },
