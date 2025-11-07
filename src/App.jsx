@@ -1,3 +1,20 @@
+/**
+ * Landbys Cup - Main Application Component
+ * 
+ * TODO: Refactor - This file is large (1200+ lines) and contains multiple components.
+ * Consider splitting into separate component files in a components/ directory:
+ * - components/Header.jsx
+ * - components/LoginBox.jsx
+ * - components/Competitions.jsx
+ * - components/Shooters.jsx
+ * - components/Scores.jsx
+ * - components/Results.jsx
+ * - components/CupResults.jsx
+ * - components/icons/index.jsx (for all SVG icons)
+ * 
+ * This will improve maintainability and code organization.
+ */
+
 import React from 'react';
 import { db, auth } from './firebase';
 import {
@@ -371,7 +388,7 @@ function Shooters({ shooters, user }) {
         const counterDoc = await transaction.get(counterRef);
 
         if (!counterDoc.exists()) {
-          throw "Shooter counter document does not exist!";
+          throw new Error("Shooter counter document does not exist!");
         }
 
         newStartNumber = counterDoc.data().currentNumber + 1;
