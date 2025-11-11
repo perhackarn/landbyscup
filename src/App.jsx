@@ -1090,7 +1090,8 @@ function CupResults({ shooters, scores, competitions }) {
           s.cupTotal
         ]);
 
-        doc.autoTable({
+        
+        autoTable({
           startY: startY,
           head: headers,
           body: body,
