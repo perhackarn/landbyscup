@@ -882,35 +882,32 @@ function Results({ shooters, scores, competitions }) {
         ["Plats", "Skytt", "Ort", ...allStations.map(st => "St " + st), ...skiljemalStationer.map((st, i) => `Skilje ${i + 1}`), "Summa"]
       ];
 
-      autoTable({
-        startY,
-        head: headers,
-        body: rows,
-        theme: "grid",
-        styles: {
-          fontSize: 10,
-          cellPadding: 2,
-          halign: "left",
-          valign: "middle"
-        },
-        headStyles: {
-          fillColor: [71, 85, 105],
-          textColor: 255,
-          fontStyle: "bold"
-        },
-        alternateRowStyles: { fillColor: [248, 250, 252] },
-        margin: { left: 10, right: 10 },
-        didDrawPage: (data) => {
-          doc.setFontSize(13);
-          doc.text(klass, 10, data.settings.startY - 4);
-        }
-      });
-      startY = doc.lastAutoTable.finalY + 10;
-    });
-
-    doc.save(`resultatlista_${selectedComp?.name || ""}.pdf`);
-  };
-
+      autoTable(doc, {  
+  startY,
+  head: headers,
+  body: rows,
+  theme: "grid",
+  styles: {
+    fontSize: 10,
+    cellPadding: 2,
+    halign: "left",
+    valign: "middle"
+  },
+  headStyles: {
+    fillColor: [71, 85, 105],
+    textColor: 255,
+    fontStyle: "bold"
+  },
+  alternateRowStyles: { fillColor: [248, 250, 252] },
+  margin: { left: 10, right: 10 },
+  didDrawPage: (data) => {
+    doc.setFontSize(13);
+    doc.text(klass, 10, data.settings.startY - 4);
+  }
+});
+startY = doc.lastAutoTable.finalY + 10;
+doc.save(`resultatlista_${selectedComp?.name || ""}.pdf`); 
+      
   return (
     <section>
       <h2 className="text-xl font-semibold mb-6 text-primary-800 flex items-center gap-3">
