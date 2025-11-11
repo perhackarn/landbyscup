@@ -33,8 +33,8 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword
 } from 'firebase/auth';
-import jsPDF from 'jspdf';
-import autoTable from 'jspdf-autotable';
+import  jsPDF  from 'jspdf';
+import 'jspdf-autotable';
 
 // SVG Icon Components
 const CalendarIcon = ({ className = "w-5 h-5" }) => (
@@ -882,32 +882,35 @@ function Results({ shooters, scores, competitions }) {
         ["Plats", "Skytt", "Ort", ...allStations.map(st => "St " + st), ...skiljemalStationer.map((st, i) => `Skilje ${i + 1}`), "Summa"]
       ];
 
-      autoTable(doc, {  
-  startY,
-  head: headers,
-  body: rows,
-  theme: "grid",
-  styles: {
-    fontSize: 10,
-    cellPadding: 2,
-    halign: "left",
-    valign: "middle"
-  },
-  headStyles: {
-    fillColor: [71, 85, 105],
-    textColor: 255,
-    fontStyle: "bold"
-  },
-  alternateRowStyles: { fillColor: [248, 250, 252] },
-  margin: { left: 10, right: 10 },
-  didDrawPage: (data) => {
-    doc.setFontSize(13);
-    doc.text(klass, 10, data.settings.startY - 4);
-  }
-});
-startY = doc.lastAutoTable.finalY + 10;
-doc.save(`resultatlista_${selectedComp?.name || ""}.pdf`); 
-      
+      doc.autoTable({
+        startY,
+        head: headers,
+        body: rows,
+        theme: "grid",
+        styles: {
+          fontSize: 10,
+          cellPadding: 2,
+          halign: "left",
+          valign: "middle"
+        },
+        headStyles: {
+          fillColor: [71, 85, 105],
+          textColor: 255,
+          fontStyle: "bold"
+        },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
+        margin: { left: 10, right: 10 },
+        didDrawPage: (data) => {
+          doc.setFontSize(13);
+          doc.text(klass, 10, data.settings.startY - 4);
+        }
+      });
+      startY = doc.lastAutoTable.finalY + 10;
+    });
+
+    doc.save(`resultatlista_${selectedComp?.name || ""}.pdf`);
+  };
+
   return (
     <section>
       <h2 className="text-xl font-semibold mb-6 text-primary-800 flex items-center gap-3">
@@ -1087,25 +1090,25 @@ function CupResults({ shooters, scores, competitions }) {
           s.cupTotal
         ]);
 
-        
-       autoTable(doc, {
-  startY: startY,
-  head: headers,
-  body: body,
-  theme: "grid",
-  didDrawPage: (data) => {
-    doc.setFontSize(13);
-    doc.text(klass.charAt(0).toUpperCase() + klass.slice(1), 14, data.settings.startY - 4);
-  },
-  headStyles: { fillColor: [71, 85, 105], textColor: 255, fontStyle: "bold" },
-  alternateRowStyles: { fillColor: [248, 250, 252] },
-  margin: { left: 14, right: 14 },
-});
-startY = doc.lastAutoTable.finalY + 10;
+        doc.autoTable({
+          startY: startY,
+          head: headers,
+          body: body,
+          theme: "grid",
+          didDrawPage: (data) => {
+            doc.setFontSize(13);
+            doc.text(klass.charAt(0).toUpperCase() + klass.slice(1), 14, data.settings.startY - 4);
+          },
+          headStyles: { fillColor: [71, 85, 105], textColor: 255, fontStyle: "bold" },
+          alternateRowStyles: { fillColor: [248, 250, 252] },
+          margin: { left: 14, right: 14 },
+        });
+        startY = doc.lastAutoTable.finalY + 10;
+      }
+    });
 
-// ...
-
-doc.save(`cupresultat_landbys_cup.pdf`);
+    doc.save(`cupresultat_landbys_cup.pdf`);
+  };
 
   return (
     <section>
