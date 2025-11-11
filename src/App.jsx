@@ -1091,25 +1091,24 @@ function CupResults({ shooters, scores, competitions }) {
         ]);
 
         
-        autoTable({
-          startY: startY,
-          head: headers,
-          body: body,
-          theme: "grid",
-          didDrawPage: (data) => {
-            doc.setFontSize(13);
-            doc.text(klass.charAt(0).toUpperCase() + klass.slice(1), 14, data.settings.startY - 4);
-          },
-          headStyles: { fillColor: [71, 85, 105], textColor: 255, fontStyle: "bold" },
-          alternateRowStyles: { fillColor: [248, 250, 252] },
-          margin: { left: 14, right: 14 },
-        });
-        startY = doc.lastAutoTable.finalY + 10;
-      }
-    });
+       autoTable(doc, {
+  startY: startY,
+  head: headers,
+  body: body,
+  theme: "grid",
+  didDrawPage: (data) => {
+    doc.setFontSize(13);
+    doc.text(klass.charAt(0).toUpperCase() + klass.slice(1), 14, data.settings.startY - 4);
+  },
+  headStyles: { fillColor: [71, 85, 105], textColor: 255, fontStyle: "bold" },
+  alternateRowStyles: { fillColor: [248, 250, 252] },
+  margin: { left: 14, right: 14 },
+});
+startY = doc.lastAutoTable.finalY + 10;
 
-    doc.save(`cupresultat_landbys_cup.pdf`);
-  };
+// ...
+
+doc.save(`cupresultat_landbys_cup.pdf`);
 
   return (
     <section>
