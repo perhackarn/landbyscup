@@ -882,7 +882,7 @@ function Results({ shooters, scores, competitions }) {
         ["Plats", "Skytt", "Ort", ...allStations.map(st => "St " + st), ...skiljemalStationer.map((st, i) => `Skilje ${i + 1}`), "Summa"]
       ];
 
-      doc.autoTable({
+      autoTable({
         startY,
         head: headers,
         body: rows,
