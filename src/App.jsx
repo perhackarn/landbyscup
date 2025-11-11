@@ -35,6 +35,7 @@ import {
 } from 'firebase/auth';
 import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+autoTable(jsPDF);
 
 // SVG Icon Components
 const CalendarIcon = ({ className = "w-5 h-5" }) => (
