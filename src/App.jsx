@@ -33,8 +33,9 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword
 } from 'firebase/auth';
-import  jsPDF  from 'jspdf';
+import jsPDF from 'jspdf';
 import 'jspdf-autotable';
+
 
 // SVG Icon Components
 const CalendarIcon = ({ className = "w-5 h-5" }) => (
