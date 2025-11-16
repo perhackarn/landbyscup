@@ -132,26 +132,29 @@ Exempel på grundläggande säkerhetsregler:
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Tillåt läsning för alla
+    // Allow public read access to most collections
     match /{document=**} {
       allow read: if true;
     }
-    
-    // Kräv autentisering för skrivoperationer
+
+    // Allow anyone to add a shooter
+    match /shooters/{shooterId} {
+      allow create: if true;
+      // Only authenticated users can update or delete
+      allow update, delete: if request.auth != null;
+    }
+
+    // Allow anyone to read and write to the shooter counter for transactions
+    match /counters/shooter {
+      allow read, write: if true;
+    }
+
+    // Competitions and scores still require authentication for writes
     match /competitions/{competitionId} {
       allow write: if request.auth != null;
     }
-    
-    match /shooters/{shooterId} {
-      allow write: if request.auth != null;
-    }
-    
     match /scores/{scoreId} {
-      allow write: if request.auth != null;
-    }
-    
-    match /counters/{counterId} {
-      allow write: if request.auth != null;
+        allow write: if request.auth != null;
     }
   }
 }
