@@ -34,7 +34,7 @@ import {
   signInWithEmailAndPassword
 } from 'firebase/auth';
 import { jsPDF } from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 
 
@@ -884,18 +884,19 @@ function Results({ shooters, scores, competitions }) {
         ["Plats", "Skytt", "Ort", ...allStations.map(st => "St " + st), ...skiljemalStationer.map((st, i) => `Skilje ${i + 1}`), "Summa"]
       ];
 
-      doc.autoTable({
+      const table = autoTable(doc, {
         startY,
         head: headers,
         body: rows,
         theme: "grid",
         styles: {
-          fontSize: 10,
+          fontSize: 8,
           cellPadding: 2,
           halign: "left",
           valign: "middle"
         },
         headStyles: {
+          fontSize: 9,
           fillColor: [71, 85, 105],
           textColor: 255,
           fontStyle: "bold"
@@ -903,11 +904,11 @@ function Results({ shooters, scores, competitions }) {
         alternateRowStyles: { fillColor: [248, 250, 252] },
         margin: { left: 10, right: 10 },
         didDrawPage: (data) => {
-          doc.setFontSize(13);
-          doc.text(klass, 10, data.settings.startY - 4);
+          doc.setFontSize(12);
+          doc.text(klass, 10, data.settings.startY - 4);     
         }
       });
-      startY = doc.lastAutoTable.finalY + 10;
+      startY = (table?.finalY ?? doc.lastAutoTable?.finalY ?? startY) + 10;
     });
 
     doc.save(`resultatlista_${selectedComp?.name || ""}.pdf`);
@@ -1073,7 +1074,7 @@ function CupResults({ shooters, scores, competitions }) {
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
 
     doc.setFontSize(16);
-    doc.text("Cupresultat - Landbys Cup", 148.5, 20, { align: "center" });
+    doc.text("Cupresultat", 148.5, 20, { align: "center" });
 
     let startY = 30;
     klassLista.forEach(klass => {
@@ -1092,20 +1093,26 @@ function CupResults({ shooters, scores, competitions }) {
           s.cupTotal
         ]);
 
-        doc.autoTable({
-          startY: startY,
+        const table = autoTable(doc, {
+          startY,
           head: headers,
           body: body,
           theme: "grid",
+          styles: {
+          fontSize: 8,
+          cellPadding: 2,
+          halign: "left",
+          valign: "middle"
+        },
           didDrawPage: (data) => {
-            doc.setFontSize(13);
+            doc.setFontSize(12);
             doc.text(klass.charAt(0).toUpperCase() + klass.slice(1), 14, data.settings.startY - 4);
           },
-          headStyles: { fillColor: [71, 85, 105], textColor: 255, fontStyle: "bold" },
+          headStyles: { fontSize: 9, fillColor: [71, 85, 105], textColor: 255, fontStyle: "bold" },
           alternateRowStyles: { fillColor: [248, 250, 252] },
           margin: { left: 14, right: 14 },
         });
-        startY = doc.lastAutoTable.finalY + 10;
+        startY = (table?.finalY ?? doc.lastAutoTable?.finalY ?? startY) + 10;
       }
     });
 
