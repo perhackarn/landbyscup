@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { orderBy } from 'firebase/firestore';
 import { useAuth } from './hooks/useAuth';
-import { useFirestoreCollection } from './hooks/useFirestoreCollection';
+import { useOptimizedFirestoreV2 } from './hooks/useOptimizedFirestoreV2';
 import { Header } from './components/Header';
 import { LoginBox } from './components/LoginBox';
 import { TabBtn } from './components/TabBtn';
@@ -22,22 +22,30 @@ function App() {
   const user = useAuth();
   const [tab, setTab] = useState("results");
 
+  // Konditionell laddning - ladda bara data som faktiskt behövs för aktiv tab
+  const needsCompetitions = tab === "competitions" || tab === "scores" || tab === "results" || tab === "cup";
+  const needsShooters = tab === "shooters" || tab === "scores" || tab === "results" || tab === "cup";
+  const needsScores = tab === "scores" || tab === "results" || tab === "cup";
+
   const { 
     data: competitions, 
     loading: loadingCompetitions 
-  } = useFirestoreCollection("competitions", [orderBy("date")]);
+  } = useOptimizedFirestoreV2("competitions", [orderBy("date")], needsCompetitions, "competitions");
   
   const { 
     data: shooters, 
     loading: loadingShooters 
-  } = useFirestoreCollection("shooters", [orderBy("startNumber")]);
+  } = useOptimizedFirestoreV2("shooters", [orderBy("startNumber")], needsShooters, "shooters");
   
   const { 
     data: scores, 
     loading: loadingScores 
-  } = useFirestoreCollection("scores", []);
+  } = useOptimizedFirestoreV2("scores", [], needsScores, "scores");
 
-  const isLoading = loadingCompetitions || loadingShooters || loadingScores;
+  // Bara visa loading om vi faktiskt behöver data för den aktiva tabben
+  const isLoading = (needsCompetitions && loadingCompetitions) || 
+                    (needsShooters && loadingShooters) || 
+                    (needsScores && loadingScores);
 
   return (
     <>

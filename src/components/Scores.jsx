@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { collection, addDoc, updateDoc, doc } from 'firebase/firestore';
+import React, { useState, useEffect, useMemo } from 'react';
+import { collection, addDoc, updateDoc, doc, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ClipboardIcon } from './icons';
+import { useOptimizedFirestoreV3 } from '../hooks/useOptimizedFirestoreV3';
 
-export function Scores({ shooters, competitions, user, scores }) {
+export function Scores({ shooters, competitions, user }) {
   const [competitionId, setCompetitionId] = useState("");
   const [station, setStation] = useState(1);
   const [searchShooter, setSearchShooter] = useState("");
@@ -16,36 +17,42 @@ export function Scores({ shooters, competitions, user, scores }) {
     { value: 0, femetta: false },
     { value: 0, femetta: false }
   ]);
-
-  const [existingScores, setExistingScores] = useState([]);
   const [editingId, setEditingId] = useState(null);
 
-  useEffect(() => {
-    if (searchShooter === "") {
-      setFilteredShooters([]);
-    } else {
-      const search = searchShooter.toLowerCase();
-      setFilteredShooters(
-        shooters.filter(s =>
-          s.name.toLowerCase().includes(search) ||
-          String(s.startNumber).includes(search)
-        )
-      );
-    }
+  // Ladda bara scores för aktuell kombination av tävling, station och skytt
+  const shouldLoadScores = competitionId && shooterId;
+  const { 
+    data: existingScores, 
+    loading: scoresLoading 
+  } = useOptimizedFirestoreV3(
+    'scores',
+    shouldLoadScores ? [
+      where('competitionId', '==', competitionId),
+      where('shooterId', '==', shooterId),
+      where('station', '==', Number(station)),
+      orderBy('__name__') // För konsistent sortering
+    ] : [],
+    shouldLoadScores,
+    `scores_${competitionId}_${shooterId}_${station}`,
+    1 * 60 * 1000, // Kortare cache för scores som ändras ofta
+    { useRealtime: true } // Realtime för live updates
+  );
+
+  // Memoized shooter filtering för prestanda
+  const memoizedShooterFiltering = useMemo(() => {
+    if (!searchShooter.trim()) return [];
+    
+    const search = searchShooter.toLowerCase();
+    return shooters.filter(s =>
+      s.name.toLowerCase().includes(search) ||
+      String(s.startNumber).includes(search) ||
+      s.club.toLowerCase().includes(search)
+    ).slice(0, 10); // Begränsa till 10 resultat för prestanda
   }, [searchShooter, shooters]);
 
   useEffect(() => {
-    if (!competitionId || !shooterId) {
-      setExistingScores([]);
-      return;
-    }
-    const filtered = (scores || []).filter(sc =>
-      sc.competitionId === competitionId &&
-      sc.station === Number(station) &&
-      sc.shooterId === shooterId
-    ).sort((a, b) => (a._createdAt || 0) - (b._createdAt || 0));
-    setExistingScores(filtered);
-  }, [competitionId, station, shooterId, scores]);
+    setFilteredShooters(memoizedShooterFiltering);
+  }, [memoizedShooterFiltering]);
 
   const selectShooter = (s) => {
     setShooterId(s.id);
@@ -98,7 +105,8 @@ export function Scores({ shooters, competitions, user, scores }) {
           station,
           shots,
           total,
-          femettor
+          femettor,
+          updatedAt: new Date().toISOString() // Lägg till timestamp för bättre tracking
         });
         setEditingId(null);
       } else {
@@ -108,10 +116,13 @@ export function Scores({ shooters, competitions, user, scores }) {
           station,
           shots,
           total,
-          femettor
+          femettor,
+          createdAt: new Date().toISOString(),
+          createdBy: user.uid // Spåra vem som skapade poängen
         });
       }
 
+      // Rensa formuläret efter lyckad sparning
       setShots([
         { value: 0, femetta: false },
         { value: 0, femetta: false },
@@ -123,10 +134,15 @@ export function Scores({ shooters, competitions, user, scores }) {
       setSearchShooter("");
       setFilteredShooters([]);
     } catch (e) {
-      console.error(e);
+      console.error("Error saving score:", e);
       alert("Kunde inte spara poäng, försök igen.");
     }
   };
+
+  // Beräkna totalsumma för alla skott på denna station/skytt/tävling
+  const stationTotal = useMemo(() => {
+    return existingScores.reduce((sum, score) => sum + (score.total || 0), 0);
+  }, [existingScores]);
 
   const stationOptions = Array.from({ length: 7 }, (_, i) => i + 1);
 
@@ -136,23 +152,38 @@ export function Scores({ shooters, competitions, user, scores }) {
         <ClipboardIcon className="w-6 h-6" />
         Registrera poäng
       </h2>
+      
       <div className="flex flex-col md:flex-row gap-4 mb-6">
         <div className="flex-1">
           <label className="block text-sm font-medium text-primary-700 mb-2">Tävling:</label>
-          <select value={competitionId} onChange={e => setCompetitionId(e.target.value)} className="border border-primary-300 p-3 rounded-lg w-full focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+          <select 
+            value={competitionId} 
+            onChange={e => {
+              setCompetitionId(e.target.value);
+              // Rensa shooter selection när tävling ändras
+              setShooterId("");
+              setSearchShooter("");
+            }} 
+            className="border border-primary-300 p-3 rounded-lg w-full focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+          >
             <option value="">Välj tävling</option>
             {competitions.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
         </div>
+        
         <div>
           <label className="block text-sm font-medium text-primary-700 mb-2">Station:</label>
-          <select value={station} onChange={e => setStation(Number(e.target.value))}
-            className="border border-primary-300 p-3 rounded-lg w-40 min-w-[120px] focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors">
+          <select 
+            value={station} 
+            onChange={e => setStation(Number(e.target.value))}
+            className="border border-primary-300 p-3 rounded-lg w-40 min-w-[120px] focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
+          >
             {stationOptions.map(num => (
               <option key={num} value={num}>Station {num}</option>
             ))}
           </select>
         </div>
+        
         <div className="flex flex-col flex-1 relative">
           <label className="block text-sm font-medium text-primary-700 mb-2">Sök skytt:</label>
           <input
@@ -162,7 +193,7 @@ export function Scores({ shooters, competitions, user, scores }) {
               setSearchShooter(e.target.value);
               setShooterId("");
             }}
-            placeholder="Namn eller startnummer"
+            placeholder="Namn, startnummer eller klubb"
             className="border border-primary-300 p-3 rounded-lg mb-1 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
             autoComplete="off"
           />
@@ -174,13 +205,25 @@ export function Scores({ shooters, competitions, user, scores }) {
                   className="px-4 py-3 hover:bg-primary-50 cursor-pointer border-b border-primary-100 last:border-b-0"
                   onClick={() => selectShooter(s)}
                 >
-                  <span className="font-medium text-primary-800">#{s.startNumber} {s.name}</span> <span className="text-primary-600">({s.club})</span>
+                  <span className="font-medium text-primary-800">#{s.startNumber} {s.name}</span> 
+                  <span className="text-primary-600 ml-2">({s.club})</span>
+                  <span className="text-xs text-primary-500 ml-2">{s.klass}</span>
                 </li>
               ))}
             </ul>
           )}
         </div>
       </div>
+
+      {/* Visa befintlig total för denna kombination */}
+      {shouldLoadScores && existingScores.length > 0 && (
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="text-sm text-blue-700">
+            <strong>Nuvarande total för denna station:</strong> {stationTotal} poäng ({existingScores.length} registreringar)
+          </div>
+        </div>
+      )}
+      
       <div className="flex gap-3 mb-6 justify-center bg-primary-50 p-6 rounded-lg border border-primary-200">
         {shots.map((shot, i) => (
           <div key={i} className="flex flex-col items-center">
@@ -212,44 +255,78 @@ export function Scores({ shooters, competitions, user, scores }) {
           </div>
         ))}
       </div>
+      
       <div className="text-lg font-semibold text-primary-800 mb-6 text-center bg-white p-4 rounded-lg border border-primary-200">
-        Summa: <span className="text-primary-700">{shots.reduce((a, b) => a + (Number(b.value) || 0), 0)} poäng</span>, 5¹/10¹or: <span className="text-primary-700">{shots.filter(s => s.femetta && (s.value === 5 || s.value === 10)).length}</span>
+        Summa: <span className="text-primary-700">{shots.reduce((a, b) => a + (Number(b.value) || 0), 0)} poäng</span>, 
+        5¹/10¹or: <span className="text-primary-700">{shots.filter(s => s.femetta && (s.value === 5 || s.value === 10)).length}</span>
       </div>
 
       <div className="text-center mb-4">
-        <button onClick={saveScore}
-          className={`bg-primary-700 hover:bg-primary-800 text-white px-8 py-3 rounded-lg font-medium shadow-sm transition-colors ${!user || !shooterId ? "opacity-50 cursor-not-allowed" : ""}`}
-          disabled={!user || !shooterId}>{editingId ? "Uppdatera poäng" : "Spara poäng"}</button>
+        <button 
+          onClick={saveScore}
+          className={`bg-primary-700 hover:bg-primary-800 text-white px-8 py-3 rounded-lg font-medium shadow-sm transition-colors ${
+            !user || !shooterId ? "opacity-50 cursor-not-allowed" : ""
+          }`}
+          disabled={!user || !shooterId}
+        >
+          {editingId ? "Uppdatera poäng" : "Spara poäng"}
+        </button>
 
         {editingId && (
-          <button onClick={cancelEdit} className="ml-4 bg-primary-200 hover:bg-primary-300 text-primary-700 px-4 py-3 rounded-lg font-medium transition-colors">Avbryt</button>
+          <button 
+            onClick={cancelEdit} 
+            className="ml-4 bg-primary-200 hover:bg-primary-300 text-primary-700 px-4 py-3 rounded-lg font-medium transition-colors"
+          >
+            Avbryt
+          </button>
         )}
       </div>
 
       <div className="mb-6">
-        <h3 className="text-md font-semibold mb-2"> Registrerade skott </h3>
-        {(!competitionId || !shooterId) ? (
+        <h3 className="text-md font-semibold mb-2">Registrerade skott</h3>
+        {scoresLoading ? (
+          <div className="flex items-center justify-center py-4">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-700"></div>
+            <span className="ml-2 text-primary-700">Laddar...</span>
+          </div>
+        ) : !shouldLoadScores ? (
           <p className="text-sm text-primary-600">Välj tävling och skytt för att se tidigare registreringar.</p>
         ) : existingScores.length === 0 ? (
           <p className="text-sm text-primary-600">Inga registreringar hittades för denna kombination.</p>
         ) : (
           <div className="space-y-2">
-            {existingScores.map(sc => (
+            {existingScores.map((sc, index) => (
               <div key={sc.id} className="bg-primary-50 p-3 rounded-lg border border-primary-200 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
                 <div>
-                  <div className="text-sm text-primary-700 font-medium mb-1">Skott:</div>
+                  <div className="text-sm text-primary-700 font-medium mb-1">
+                    Skott #{index + 1}:
+                  </div>
                   <div className="flex gap-3 items-center">
                     {(sc.shots || []).map((sh, idx) => (
                       <div key={idx} className="text-sm font-mono px-2 py-1 bg-white border border-primary-200 rounded">
                         {String(sh.value || 0)}{sh.femetta ? "¹" : ""}
                       </div>
                     ))}
-                    <div className="text-sm text-primary-700 ml-3">Summa: <span className="font-semibold">{sc.total || 0}</span></div>
-                    <div className="text-sm text-primary-700 ml-3">5¹/10¹or: <span className="font-semibold">{sc.femettor || 0}</span></div>
+                    <div className="text-sm text-primary-700 ml-3">
+                      Summa: <span className="font-semibold">{sc.total || 0}</span>
+                    </div>
+                    <div className="text-sm text-primary-700 ml-3">
+                      5¹/10¹or: <span className="font-semibold">{sc.femettor || 0}</span>
+                    </div>
+                    {sc.createdAt && (
+                      <div className="text-xs text-primary-500 ml-3">
+                        {new Date(sc.createdAt).toLocaleString('sv-SE')}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex gap-2">
-                  <button onClick={() => startEditScore(sc)} className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded-lg font-medium">Ändra</button>
+                  <button 
+                    onClick={() => startEditScore(sc)} 
+                    className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded-lg font-medium transition-colors"
+                  >
+                    Ändra
+                  </button>
                 </div>
               </div>
             ))}
@@ -257,7 +334,11 @@ export function Scores({ shooters, competitions, user, scores }) {
         )}
       </div>
 
-      {!user && <p className="text-red-600 text-sm mt-4 bg-red-50 p-3 rounded-lg border border-red-200 text-center">Logga in för att registrera poäng.</p>}
+      {!user && (
+        <p className="text-red-600 text-sm mt-4 bg-red-50 p-3 rounded-lg border border-red-200 text-center">
+          Logga in för att registrera poäng.
+        </p>
+      )}
     </section>
   );
 }
