@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, orderBy } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, orderBy, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ClipboardIcon } from './icons';
-import { useOptimizedFirestoreV3 } from '../hooks/useOptimizedFirestoreV3';
 
 export function Scores({ shooters, competitions, user }) {
   const [competitionId, setCompetitionId] = useState("");
@@ -18,25 +17,41 @@ export function Scores({ shooters, competitions, user }) {
     { value: 0, femetta: false }
   ]);
   const [editingId, setEditingId] = useState(null);
+  const [existingScores, setExistingScores] = useState([]);
+  const [scoresLoading, setScoresLoading] = useState(false);
 
-  // Ladda bara scores för aktuell kombination av tävling, station och skytt
-  const shouldLoadScores = competitionId && shooterId;
-  const { 
-    data: existingScores, 
-    loading: scoresLoading 
-  } = useOptimizedFirestoreV3(
-    'scores',
-    shouldLoadScores ? [
+  // Ladda scores direkt med Firestore onSnapshot
+  useEffect(() => {
+    if (!competitionId || !shooterId || !station) {
+      setExistingScores([]);
+      setScoresLoading(false);
+      return;
+    }
+
+    setScoresLoading(true);
+    
+    const q = query(
+      collection(db, 'scores'),
       where('competitionId', '==', competitionId),
       where('shooterId', '==', shooterId),
       where('station', '==', Number(station)),
-      orderBy('__name__') // För konsistent sortering
-    ] : [],
-    shouldLoadScores,
-    `scores_${competitionId}_${shooterId}_${station}`,
-    1 * 60 * 1000, // Kortare cache för scores som ändras ofta
-    { useRealtime: true } // Realtime för live updates
-  );
+      orderBy('__name__')
+    );
+
+    const unsubscribe = onSnapshot(q, (snapshot) => {
+      const scores = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setExistingScores(scores);
+      setScoresLoading(false);
+    }, (error) => {
+      console.error('Error loading scores:', error);
+      setScoresLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, [competitionId, shooterId, station]);
 
   // Memoized shooter filtering för prestanda
   const memoizedShooterFiltering = useMemo(() => {
@@ -58,6 +73,10 @@ export function Scores({ shooters, competitions, user }) {
     setShooterId(s.id);
     setSearchShooter(`#${s.startNumber} ${s.name}`);
     setFilteredShooters([]);
+    // Rensa eventuell redigeringsstate när vi byter skytt
+    if (editingId) {
+      cancelEdit();
+    }
   };
 
   const startEditScore = (sc) => {
@@ -193,7 +212,13 @@ export function Scores({ shooters, competitions, user }) {
           <label className="block text-sm font-medium text-primary-700 mb-2">Station:</label>
           <select 
             value={station} 
-            onChange={e => setStation(Number(e.target.value))}
+            onChange={e => {
+              setStation(Number(e.target.value));
+              // Rensa redigeringsstate när vi byter station
+              if (editingId) {
+                cancelEdit();
+              }
+            }}
             className="border border-primary-300 p-3 rounded-lg w-40 min-w-[120px] focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
           >
             {stationOptions.map(num => (
@@ -210,6 +235,10 @@ export function Scores({ shooters, competitions, user }) {
             onChange={e => {
               setSearchShooter(e.target.value);
               setShooterId("");
+              // Rensa redigeringsstate när vi byter skytt
+              if (editingId) {
+                cancelEdit();
+              }
             }}
             placeholder="Namn, startnummer eller klubb"
             className="border border-primary-300 p-3 rounded-lg mb-1 focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors"
@@ -234,7 +263,7 @@ export function Scores({ shooters, competitions, user }) {
       </div>
 
       {/* Visa befintlig total för denna kombination */}
-      {shouldLoadScores && existingScores.length > 0 && (
+      {competitionId && shooterId && station && existingScores.length > 0 && (
         <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
           <div className="text-sm text-blue-700">
             <strong>Nuvarande total för denna station:</strong> {stationTotal} poäng ({existingScores.length} registreringar)
@@ -307,7 +336,7 @@ export function Scores({ shooters, competitions, user }) {
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-700"></div>
             <span className="ml-2 text-primary-700">Laddar...</span>
           </div>
-        ) : !shouldLoadScores ? (
+        ) : !competitionId || !shooterId || !station ? (
           <p className="text-sm text-primary-600">Välj tävling och skytt för att se tidigare registreringar.</p>
         ) : existingScores.length === 0 ? (
           <p className="text-sm text-primary-600">Inga registreringar hittades för denna kombination.</p>
