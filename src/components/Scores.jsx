@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { collection, addDoc, updateDoc, doc, query, where, orderBy } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, orderBy } from 'firebase/firestore';
 import { db } from '../firebase';
 import { ClipboardIcon } from './icons';
 import { useOptimizedFirestoreV3 } from '../hooks/useOptimizedFirestoreV3';
@@ -88,6 +88,24 @@ export function Scores({ shooters, competitions, user }) {
       { value: 0, femetta: false },
       { value: 0, femetta: false }
     ]);
+  };
+
+  const deleteScore = async (scoreId) => {
+    if (!user) return alert("Du måste vara inloggad!");
+    
+    const confirmed = window.confirm("Är du säker på att du vill radera denna registrering? Detta går inte att ångra.");
+    if (!confirmed) return;
+
+    try {
+      await deleteDoc(doc(db, "scores", scoreId));
+      // Om vi redigerade just denna score, avbryt redigeringen
+      if (editingId === scoreId) {
+        cancelEdit();
+      }
+    } catch (e) {
+      console.error("Error deleting score:", e);
+      alert("Kunde inte radera registreringen, försök igen.");
+    }
   };
 
   const saveScore = async () => {
@@ -326,6 +344,12 @@ export function Scores({ shooters, competitions, user }) {
                     className="bg-yellow-500 hover:bg-yellow-600 text-white px-3 py-2 rounded-lg font-medium transition-colors"
                   >
                     Ändra
+                  </button>
+                  <button 
+                    onClick={() => deleteScore(sc.id)} 
+                    className="bg-red-500 hover:bg-red-600 text-white px-3 py-2 rounded-lg font-medium transition-colors"
+                  >
+                    Ta bort
                   </button>
                 </div>
               </div>
