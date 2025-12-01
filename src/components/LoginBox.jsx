@@ -3,7 +3,7 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../firebase';
 import { useAuth } from '../hooks/useAuth';
 
-export function LoginBox() {
+export function LoginBox({ onLoginSuccess, onClose }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const user = useAuth();
@@ -11,6 +11,7 @@ export function LoginBox() {
   const handleLogin = async () => {
     try {
       await signInWithEmailAndPassword(auth, email, password);
+      if (onLoginSuccess) onLoginSuccess();
     } catch (error) {
       alert(error.message);
     }
@@ -19,7 +20,15 @@ export function LoginBox() {
   if (user) return null;
 
   return (
-    <div className="p-6 bg-white rounded-xl shadow-sm max-w-md mx-auto mt-8 border border-primary-200">
+    <div className="p-6 bg-white rounded-xl shadow-sm max-w-md mx-auto mt-8 border border-primary-200 relative">
+      {onClose && (
+        <button
+          onClick={onClose}
+          className="absolute top-4 right-4 text-gray-500 hover:text-gray-700 text-xl font-bold"
+        >
+          ×
+        </button>
+      )}
       <h2 className="text-lg font-semibold mb-4 text-center text-primary-800">Logga in</h2>
       <input
         type="email"

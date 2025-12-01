@@ -21,6 +21,7 @@ import {
 function App() {
   const user = useAuth();
   const [tab, setTab] = useState("shooters");
+  const [showLoginBox, setShowLoginBox] = useState(false);
 
   // Konditionell laddning - ladda shooters alltid, andra data bara om användaren är inloggad och för aktiv tab
   const needsCompetitions = user && (tab === "competitions" || tab === "scores" || tab === "results" || tab === "cup");
@@ -49,8 +50,13 @@ function App() {
 
   return (
     <>
-      <Header />
-      <LoginBox />
+      <Header onLoginClick={() => setShowLoginBox(true)} />
+      {showLoginBox && !user && (
+        <LoginBox 
+          onLoginSuccess={() => setShowLoginBox(false)}
+          onClose={() => setShowLoginBox(false)}
+        />
+      )}
       <main className="max-w-6xl mx-auto mt-6 px-4 pb-10">
         <div className="bg-white rounded-xl shadow-sm p-6 md:p-8 mt-6 border border-primary-200">
           {isLoading ? (

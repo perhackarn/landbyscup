@@ -4,7 +4,7 @@ import { auth } from '../firebase';
 import { useAuth } from '../hooks/useAuth';
 import { TargetIcon } from './icons';
 
-export function Header() {
+export function Header({ onLoginClick }) {
   const user = useAuth();
 
   const handleLogout = async () => {
@@ -36,7 +36,15 @@ export function Header() {
               </button>
             </div>
           ) : (
-            <span className="text-primary-300 text-sm">Ej inloggad</span>
+            <div className="flex flex-col sm:flex-row items-end sm:items-center gap-2 sm:gap-3">
+              <span className="text-primary-300 text-xs sm:text-sm">Ej inloggad</span>
+              <button
+                onClick={onLoginClick}
+                className="bg-primary-600 hover:bg-primary-700 text-white px-3 py-1 rounded-md font-medium text-sm transition-colors flex-shrink-0"
+              >
+                Logga in
+              </button>
+            </div>
           )}
         </div>
       </div>
