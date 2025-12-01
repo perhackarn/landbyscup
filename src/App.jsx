@@ -20,12 +20,12 @@ import {
 
 function App() {
   const user = useAuth();
-  const [tab, setTab] = useState("results");
+  const [tab, setTab] = useState("shooters");
 
-  // Konditionell laddning - ladda bara data som faktiskt behövs för aktiv tab
-  const needsCompetitions = tab === "competitions" || tab === "scores" || tab === "results" || tab === "cup";
-  const needsShooters = tab === "shooters" || tab === "scores" || tab === "results" || tab === "cup";
-  const needsScores = tab === "scores" || tab === "results" || tab === "cup";
+  // Konditionell laddning - ladda shooters alltid, andra data bara om användaren är inloggad och för aktiv tab
+  const needsCompetitions = user && (tab === "competitions" || tab === "scores" || tab === "results" || tab === "cup");
+  const needsShooters = tab === "shooters" || (user && (tab === "scores" || tab === "results" || tab === "cup"));
+  const needsScores = user && (tab === "scores" || tab === "results" || tab === "cup");
 
   const { 
     data: competitions, 
@@ -61,21 +61,25 @@ function App() {
           ) : (
             <>
               <nav className="flex flex-wrap gap-2 mb-8 justify-center md:justify-start">
-                <TabBtn active={tab === "results"} onClick={() => setTab("results")} icon={<TrophyIcon />}>Resultatlistor</TabBtn>
-                <TabBtn active={tab === "cup"} onClick={() => setTab("cup")} icon={<AwardIcon />}>Cupresultat</TabBtn>
                 <TabBtn active={tab === "shooters"} onClick={() => setTab("shooters")} icon={<UsersIcon />}>Skyttar</TabBtn>
                 {user && (
                   <>
+                    <TabBtn active={tab === "results"} onClick={() => setTab("results")} icon={<TrophyIcon />}>Resultatlistor</TabBtn>
+                    <TabBtn active={tab === "cup"} onClick={() => setTab("cup")} icon={<AwardIcon />}>Cupresultat</TabBtn>
                     <TabBtn active={tab === "competitions"} onClick={() => setTab("competitions")} icon={<CalendarIcon />}>Deltävlingar</TabBtn>
                     <TabBtn active={tab === "scores"} onClick={() => setTab("scores")} icon={<ClipboardIcon />}>Registrera Poäng</TabBtn>
                   </>
                 )}
               </nav>
-              {tab === "competitions" && user && <Competitions competitions={competitions} user={user} />}
               {tab === "shooters" && <Shooters shooters={shooters} user={user} />}
-              {tab === "scores" && user && <Scores shooters={shooters} competitions={competitions} scores={scores} user={user} />}
-              {tab === "results" && <Results shooters={shooters} scores={scores} competitions={competitions} />}
-              {tab === "cup" && <CupResults shooters={shooters} scores={scores} competitions={competitions} />}
+              {user && (
+                <>
+                  {tab === "competitions" && <Competitions competitions={competitions} user={user} />}
+                  {tab === "scores" && <Scores shooters={shooters} competitions={competitions} scores={scores} user={user} />}
+                  {tab === "results" && <Results shooters={shooters} scores={scores} competitions={competitions} />}
+                  {tab === "cup" && <CupResults shooters={shooters} scores={scores} competitions={competitions} />}
+                </>
+              )}
             </>
           )}
         </div>
