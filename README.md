@@ -13,12 +13,6 @@ Landbys Cup är en produktionsklar Vite + React-applikation som migrerades från
 - Beräkna och visa cupresultat baserat på de 5 bästa placeringarna
 - Exportera resultat och cuplistor som PDF
 
-## Originalfil
-
-Denna applikation är migrerad från den ursprungliga single-file implementationen som finns i:
-- [index.html.old](./index.html.old) (backup av originalfilen)
-- Original blob path i repo: `index.html`
-
 ## Teknisk Stack
 
 - **Frontend Framework**: React 18
@@ -93,6 +87,71 @@ För att förhandsgranska produktionsbuilden lokalt:
 npm run preview
 ```
 
+## Deployment
+
+### GitHub Pages
+
+Applikationen är konfigurerad för deployment till GitHub Pages:
+
+```bash
+npm run deploy
+```
+
+Detta bygger applikationen och deployar den till GitHub Pages. Säkerställ att:
+- `vite.config.js` har rätt `base` path inställd (ska matcha repo-namnet)
+- GitHub Pages är aktiverat i repository settings
+- `homepage` i `package.json` matchar din GitHub Pages URL
+
+### Eget Webbhotell
+
+För att deploya till ditt eget webbhotell:
+
+1. **Uppdatera base path i `vite.config.js`:**
+   ```javascript
+   export default defineConfig({
+     base: '/', // Ändra till '/' för root, eller '/undermapp/' om inte i root
+     plugins: [react()],
+   })
+   ```
+
+2. **Bygg produktionsversionen:**
+   ```bash
+   npm run build
+   ```
+
+3. **Ladda upp filer till webbhotell:**
+   - Innehållet i `dist/` mappen är din färdiga webbplats
+   - Ladda upp alla filer och mappar från `dist/` till din webbhotells root (eller önskad undermapp)
+   - Använd FTP, SFTP eller webbhotellets filhanterare
+
+4. **Konfigurera webbserver (viktigt för React Router):**
+   - För Apache: Skapa en `.htaccess` fil i samma mapp som `index.html`:
+     ```apache
+     <IfModule mod_rewrite.c>
+       RewriteEngine On
+       RewriteBase /
+       RewriteRule ^index\.html$ - [L]
+       RewriteCond %{REQUEST_FILENAME} !-f
+       RewriteCond %{REQUEST_FILENAME} !-d
+       RewriteRule . /index.html [L]
+     </IfModule>
+     ```
+   - För Nginx: Lägg till i server-konfigurationen:
+     ```nginx
+     location / {
+       try_files $uri $uri/ /index.html;
+     }
+     ```
+
+5. **Verifiera att Firebase-konfigurationen fungerar:**
+   - Kontrollera att `.env` filen INTE laddas upp (den är i `.gitignore`)
+   - Firebase-credentials kommer från environment variables som byggs in i produktionsversionen
+
+**Tips:** 
+- Testa alltid med `npm run preview` lokalt innan upload
+- Kontrollera att alla assets laddas korrekt efter deployment
+- Om bilder/filer inte hittas, dubbelkolla base path i `vite.config.js`
+
 ## Firestore Database Struktur
 
 Applikationen använder följande Firestore-samlingar:
@@ -163,14 +222,14 @@ service cloud.firestore {
 ## Funktioner
 
 ### Publika Funktioner (Ingen inloggning krävs)
-- Visa skyttar och sök
-- Visa resultatlistor per deltävling
-- Visa cupresultat
-- Exportera PDF:er
+- Visa skyttar och sök bland skyttar
+- Lägg till nya skyttar (vem som helst kan registrera sig)
 
 ### Admin-Funktioner (Inloggning krävs)
+- Visa resultatlistor per deltävling
+- Visa cupresultat
+- Exportera resultat och cuplistor som PDF
 - Lägg till/ändra/ta bort deltävlingar
-- Registrera nya skyttar
 - Ändra/ta bort skyttar
 - Registrera och ändra poäng
 
@@ -180,13 +239,27 @@ service cloud.firestore {
 landbyscup/
 ├── public/              # Statiska filer
 ├── src/
-│   ├── App.jsx         # Huvudkomponent med alla sub-komponenter
+│   ├── App.jsx         # Huvudkomponent med routing och tabbar
 │   ├── main.jsx        # React entry point
 │   ├── index.css       # Tailwind CSS imports
-│   └── firebase.js     # Firebase konfiguration och initiering
+│   ├── firebase.js     # Firebase konfiguration och initiering
+│   ├── components/     # React-komponenter
+│   │   ├── Competitions.jsx    # Hantering av deltävlingar
+│   │   ├── CupResults.jsx      # Cupresultat och PDF-export
+│   │   ├── Header.jsx          # Navigationsbar
+│   │   ├── LoginBox.jsx        # Inloggningsformulär
+│   │   ├── Results.jsx         # Resultatlistor per tävling
+│   │   ├── Scores.jsx          # Poängregistrering
+│   │   ├── Shooters.jsx        # Skytthantering
+│   │   ├── TabBtn.jsx          # Tab-knapp komponent
+│   │   └── icons/              # SVG-ikoner som komponenter
+│   └── hooks/          # Custom React hooks
+│       ├── useAuth.js                  # Autentisering hook
+│       ├── useOptimizedFirestoreV2.js  # Optimerad Firestore hook med cache
+│       └── useOptimizedFirestoreV3.js  # Ytterligare Firestore optimering
 ├── index.html          # HTML template
 ├── package.json        # Dependencies och scripts
-├── vite.config.js      # Vite konfiguration
+├── vite.config.js      # Vite konfiguration (inkl. GitHub Pages base path)
 ├── tailwind.config.cjs # Tailwind CSS konfiguration
 ├── postcss.config.cjs  # PostCSS konfiguration
 ├── .env.example        # Exempel på environment variables
@@ -194,32 +267,39 @@ landbyscup/
 └── README.md           # Denna fil
 ```
 
-## Komponenter i App.jsx
+## Komponenter
 
 Applikationen består av följande huvudkomponenter:
 
 - **Header**: Navigationsbar med inloggningsstatus och utloggningsknapp
-- **LoginBox**: Inloggningsformulär
-- **Competitions**: Hantering av deltävlingar
-- **Shooters**: Registrering och hantering av skyttar
-- **Scores**: Registrering av poäng
-- **Results**: Visning av resultatlistor per tävling
-- **CupResults**: Beräkning och visning av cupresultat
+- **LoginBox**: Inloggningsformulär med e-post/lösenord
+- **Competitions**: Hantering av deltävlingar (lägga till, ändra, ta bort)
+- **Shooters**: Registrering och hantering av skyttar med automatiska startnummer
+- **Scores**: Registrering av poäng per station (1-7) och skytt
+- **Results**: Visning av resultatlistor per tävling med PDF-export
+- **CupResults**: Beräkning och visning av cupresultat baserat på bästa 5 placeringar
+- **TabBtn**: Återanvändbar tab-knapp komponent
+- **Icons**: SVG-ikoner (Calendar, Users, Clipboard, Trophy, Award, Target)
+
+## Custom Hooks
+
+- **useAuth**: Hanterar Firebase autentisering och returnerar aktuell användare
+- **useOptimizedFirestoreV2**: Optimerad Firestore hook med global cache och delad lyssnare för att minska antal Firebase-anrop
 
 ## TODO - Fortsatta Förbättringar
 
 Följande förbättringar rekommenderas för framtida utveckling:
 
-1. **Komponentuppdelning**: Dela upp `App.jsx` i separata filer för varje komponent i en `components/` mapp
-2. **State Management**: Implementera Context API eller Redux för global state
-3. **Error Handling**: Förbättrad felhantering och användarfeedback
-4. **Loading States**: Lägg till laddningsindikatorer för asynkrona operationer
-5. **Form Validation**: Mer robust validering av formulärdata
-6. **Responsiveness**: Ytterligare optimering för mobila enheter
+1. ~~**Komponentuppdelning**: Dela upp `App.jsx` i separata filer för varje komponent i en `components/` mapp~~ ✅ Implementerat
+2. **State Management**: Implementera Context API för att dela state mellan komponenter
+3. **Error Handling**: Förbättrad felhantering och användarfeedback vid Firebase-fel
+4. ~~**Loading States**: Lägg till laddningsindikatorer för asynkrona operationer~~ ✅ Implementerat
+5. **Form Validation**: Mer robust validering av formulärdata (t.ex. datum-format)
+6. **Responsiveness**: Ytterligare optimering för små mobila enheter
 7. **Testing**: Lägg till enhetstester och integrationstester
 8. **Accessibility**: Förbättra tillgänglighet (ARIA-labels, keyboard navigation)
-9. **Performance**: Optimera rendering med React.memo och useMemo
-10. **Environment-specific configs**: Separata konfigurationer för dev/staging/production
+9. ~~**Performance**: Optimera rendering med React.memo och useMemo~~ ✅ Delvis implementerat (useOptimizedFirestoreV2 med cache)
+10. **Environment-specific configs**: Separata Firebase-konfigurationer för dev/staging/production
 
 ## Licens
 
